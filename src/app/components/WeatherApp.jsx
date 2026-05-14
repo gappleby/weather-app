@@ -52,6 +52,11 @@ export default function WeatherApp() {
     const queryCityParam = searchParams.get('city');
     const queryUnitsParam = searchParams.get('units');
     const units = VALID_UNITS.includes(queryUnitsParam) ? queryUnitsParam : 'metric';
+    const apiKey = searchParams.get('openweathermapapi') || API_KEY;
+    const parseBool = (val) => !['false', 'f', 'n'].includes((val ?? '').toLowerCase());
+    const showTime = parseBool(searchParams.get('showtime'));
+    const showDate = parseBool(searchParams.get('showdate'));
+    const showForecast = parseBool(searchParams.get('showforecast'));
     const tempUnit = units === 'metric' ? '°C' : '°F';
     const windUnit = units === 'metric' ? 'm/s' : 'mph';
 
@@ -68,7 +73,7 @@ export default function WeatherApp() {
         setError("");
         try {
             const weatherRes = await axios.get(
-                `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=${units}&appid=${API_KEY}`
+                `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=${units}&appid=${apiKey}`
             );
             setWeatherData(weatherRes.data);
             const { lat, lon } = weatherRes.data.coord;
@@ -99,7 +104,7 @@ export default function WeatherApp() {
         } finally {
             setLoading(false);
         }
-    }, [city, units])
+    }, [city, units, apiKey])
 
     useEffect(() => {
         fetchWeatherData();
@@ -116,8 +121,8 @@ export default function WeatherApp() {
 
     return (
         <section className="relative bg-gradient-to-br from-[#87CEFA] to-[#0A1628] px-responsive-x py-responsive-y flex flex-col justify-center gap-5 rounded-2xl sm:gap-8 text-center h-full w-full">
-            {locationMeta && <LocationDate timezone={locationMeta.timezone} country={locationMeta.country} />}
-            {utcOffsetSeconds !== null && <LocationClock utcOffsetSeconds={utcOffsetSeconds} />}
+            {showDate && locationMeta && <LocationDate timezone={locationMeta.timezone} country={locationMeta.country} />}
+            {showTime && utcOffsetSeconds !== null && <LocationClock utcOffsetSeconds={utcOffsetSeconds} />}
             {!queryCityParam && <Search onInputChange={handleInputChange} onSearchClick={handleSearchClick} />}
             {loading && <p>Loading...</p>}
             {error && <p className="text-red-500">{error}</p>}
@@ -134,7 +139,7 @@ export default function WeatherApp() {
                         <Card isWind={false} value={`${weatherData.main.humidity}%`} />
                         <Card isWind={true} value={`${weatherData.wind.speed} ${windUnit}`} />
                     </div>
-                    {forecastItems && <ForecastStrip forecasts={forecastItems} tempUnit={tempUnit} />}
+                    {showForecast && forecastItems && <ForecastStrip forecasts={forecastItems} tempUnit={tempUnit} />}
                 </>
             )}
         </section>

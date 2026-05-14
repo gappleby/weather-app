@@ -33,7 +33,7 @@ You can try the game live [here](https://github.com/aryansoni-git/weather-app/)!
 - **Auto-refresh** every hour — current conditions and forecast update automatically.
 - Full-screen layout with a thin black border — suitable for always-on or kiosk displays.
 - Responsive design with Tailwind CSS, including fluid typography that scales down on narrow screens.
-- Query string parameters to pre-set city and units with no search bar shown.
+- Query string parameters to pre-set city, units, API key, and visibility of clock, date, and forecast — no search bar shown in kiosk mode.
 - Error handling for invalid city names or network issues.
 
 ## Getting Started
@@ -89,24 +89,40 @@ To get a local copy of this project up and running, follow these steps.
 
 ### Query string parameters
 
-You can pre-set the city and unit system via URL query string parameters. When a `city` parameter is present the search bar is hidden, making the app suitable for always-on or embedded displays.
+All parameters are optional and can be combined freely. When a `city` parameter is present the search bar is hidden, making the app suitable for always-on or embedded displays.
 
 | Parameter | Values | Default | Description |
 |-----------|--------|---------|-------------|
-| `city` | any city name | `melbourne` | City to display on load. Hides the search bar. |
+| `city` | any city name | `melbourne,au` | City to display on load. Hides the search bar. Append a country code (e.g. `,us`) to resolve ambiguous names. |
 | `units` | `metric` \| `imperial` | `metric` | `metric` → °C / m/s · `imperial` → °F / mph |
+| `openweathermapapi` | API key string | *(env var)* | Overrides the `NEXT_PUBLIC_OPENWEATHERMAP_API_KEY` environment variable. Falls back to the env var when absent. **Note:** keys in query strings are visible in browser history and server logs — only use this on private/controlled deployments. |
+| `showtime` | `true` \| `T` \| `Y` \| `false` \| `F` \| `N` | `true` | Show or hide the live clock in the top-right corner. |
+| `showdate` | `true` \| `T` \| `Y` \| `false` \| `F` \| `N` | `true` | Show or hide the date in the top-left corner. |
+| `showforecast` | `true` \| `T` \| `Y` \| `false` \| `F` \| `N` | `true` | Show or hide the 6-hour hourly forecast strip. |
 
 **Examples:**
 
 ```
 # London in metric (default)
-http://localhost:3000/?city=London
+http://localhost:3000/?city=london,gb
 
 # New York in imperial, no search bar
-http://localhost:3000/?city=New+York&units=imperial
+http://localhost:3000/?city=new+york,us&units=imperial
 
 # Tokyo in Fahrenheit
-http://localhost:3000/?city=Tokyo&units=imperial
+http://localhost:3000/?city=tokyo,jp&units=imperial
+
+# Minimal kiosk — no clock, no date, no forecast
+http://localhost:3000/?city=singapore,sg&showtime=F&showdate=F&showforecast=F
+
+# Hide the forecast strip only
+http://localhost:3000/?city=dubai,ae&showforecast=false
+
+# Override the API key via URL
+http://localhost:3000/?city=paris,fr&openweathermapapi=your_key_here
+
+# Conditions only, imperial, custom key
+http://localhost:3000/?city=chicago,us&units=imperial&showforecast=N&openweathermapapi=your_key_here
 ```
 
 ## Components
