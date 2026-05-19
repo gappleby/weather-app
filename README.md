@@ -9,7 +9,7 @@ A modern, responsive weather application built using **Next.js 14** and **Tailwi
 
 ![cover](/public/cover.png)
 
-You can try the game live [here](https://github.com/aryansoni-git/weather-app/)!
+You can try the game live [here](https://gappleby.github.io/weather-app/?city=melbourne,au)!
 
 ## Table of Contents
 
