@@ -5,6 +5,7 @@ const nextConfig = {
     output: process.env.DOCKER_BUILD ? 'standalone' : undefined,
     env: {
         NEXT_PUBLIC_OPENWEATHERMAP_API_KEY: process.env.NEXT_PUBLIC_OPENWEATHERMAP_API_KEY,
+        NEXT_PUBLIC_BUSMAPS_API_KEY: process.env.NEXT_PUBLIC_BUSMAPS_API_KEY,
     },
 };
 
