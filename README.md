@@ -30,10 +30,11 @@ You can try the game live [here](https://github.com/aryansoni-git/weather-app/)!
 - **6-hour hourly forecast strip** powered by Open-Meteo (no API key required) — true 1-hour intervals.
 - **Live location clock** (top right) showing the current time at the queried city, updating every second.
 - **Live location date** (top left) in the regional date format of the city's country, updating every minute.
+- **Next public transport departures** (train, tram, bus, ferry) via BusMaps — refreshes every 15 minutes.
 - **Auto-refresh** every hour — current conditions and forecast update automatically.
 - Full-screen layout with a thin black border — suitable for always-on or kiosk displays.
 - Responsive design with Tailwind CSS, including fluid typography that scales down on narrow screens.
-- Query string parameters to pre-set city, units, API key, and visibility of clock, date, and forecast — no search bar shown in kiosk mode.
+- Query string parameters to pre-set city, coordinates, units, API keys, and visibility of all sections — no search bar shown in kiosk mode.
 - Error handling for invalid city names or network issues.
 
 ## Getting Started
@@ -64,10 +65,13 @@ To get a local copy of this project up and running, follow these steps.
    - Visit [OpenWeatherMap](https://openweathermap.org/api) and sign up to get your API key.
 
 4. **Set up environment variables:**
-   - Create a `.env.local` file in the root directory and add your API key:
+   - Create a `.env.local` file in the root directory:
      ```
-     NEXT_PUBLIC_OPENWEATHERMAP_API_KEY=your_api_key_here
+     NEXT_PUBLIC_OPENWEATHERMAP_API_KEY=your_owm_key_here
+     NEXT_PUBLIC_BUSMAPS_API_KEY=your_busmaps_key_here
      ```
+   - OpenWeatherMap keys are available on the free tier at [openweathermap.org/api](https://openweathermap.org/api).
+   - BusMaps keys must be requested via the [BusMaps developer portal](https://busmaps.com/en/developers/access). The BusMaps key is only required when `showdepartures=true`.
 
 5. **Run the application:**
    ```bash
@@ -89,70 +93,149 @@ To get a local copy of this project up and running, follow these steps.
 
 ### Query string parameters
 
-All parameters are optional and can be combined freely. When a `city` parameter is present the search bar is hidden, making the app suitable for always-on or embedded displays.
+All parameters are optional and can be combined freely. When a `city` or `lat`/`lon` parameter is present the search bar is hidden, making the app suitable for always-on or embedded displays.
 
-| Parameter | Values | Default | Description |
-|-----------|--------|---------|-------------|
-| `city` | any city name | `melbourne,au` | City to display on load. Hides the search bar. Append a country code (e.g. `,us`) to resolve ambiguous names. |
-| `units` | `metric` \| `imperial` | `metric` | `metric` → °C / m/s · `imperial` → °F / mph |
-| `openweathermapapi` | API key string | *(env var)* | Overrides the `NEXT_PUBLIC_OPENWEATHERMAP_API_KEY` environment variable. Falls back to the env var when absent. **Note:** keys in query strings are visible in browser history and server logs — only use this on private/controlled deployments. |
-| `showtime` | `true` \| `T` \| `Y` \| `false` \| `F` \| `N` | `true` | Show or hide the live clock in the top-right corner. |
-| `showdate` | `true` \| `T` \| `Y` \| `false` \| `F` \| `N` | `true` | Show or hide the date in the top-left corner. |
-| `showforecast` | `true` \| `T` \| `Y` \| `false` \| `F` \| `N` | `true` | Show or hide the 6-hour hourly forecast strip. |
+#### Location
 
-**Examples:**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `city` | `melbourne,au` | City name for weather lookup (e.g. `london,gb`, `new+york,us`). Append a country code to resolve ambiguous names. Hides the search bar when set. |
+| `lat` | — | Latitude. When provided together with `lon`, all three APIs (OpenWeatherMap, Open-Meteo, BusMaps) use this exact coordinate. Recommended over `city` for kiosk/display precision. Hides the search bar. |
+| `lon` | — | Longitude. Must be provided together with `lat`. |
+
+When `lat`/`lon` are set, OpenWeatherMap resolves and displays the nearest city name automatically. The `city` parameter is still used as a fallback label if desired.
+
+#### Display
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `units` | `metric` | `metric` → °C / m/s · `imperial` → °F / mph |
+| `showdate` | `true` | Show or hide the date in the top-left corner. |
+| `showtime` | `true` | Show or hide the live clock in the top-right corner. |
+| `showforecast` | `true` | Show or hide the 6-hour hourly forecast strip. |
+| `showdepartures` | `false` | Show or hide the next departures board. Requires a BusMaps API key. **Off by default.** |
+
+Accepted false values for show* params: `false`, `f`, `n`. Any other value is treated as true — except `showdepartures` which requires explicit opt-in.
+
+#### API key overrides
+
+| Parameter | Description |
+|-----------|-------------|
+| `openweathermapapi` | Overrides `NEXT_PUBLIC_OPENWEATHERMAP_API_KEY`. **Note:** keys in URLs are visible in browser history — only use on private/controlled deployments. |
+| `busmapsapi` | Overrides `NEXT_PUBLIC_BUSMAPS_API_KEY`. Same caution applies. |
+
+#### Departures (BusMaps)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `departurestopid` | — | BusMaps stop ID for a specific stop. Must be paired with `departureregion`. Takes priority over coordinate search. |
+| `departureregion` | — | BusMaps region code (e.g. `aus_vic`, `usa_ny`, `gbr_sct`). Required with `departurestopid`. |
+| `departurecount` | `5` | Number of departures to display. |
+| `departureradius` | `500` | Radius in metres for coordinate-based stop search. Tighten this (e.g. `150`) to show only the nearest stop. |
+
+Departures refresh every **15 minutes**. To find a stop's ID and region code, run this in the browser console:
+
+```js
+fetch('https://capi.busmaps.com:8443/stopsInRadius?location=LAT,LON&radius=300', {
+  headers: { 'capi-key': 'Bearer YOUR_BUSMAPS_KEY', 'capi-host': 'busmaps.com' }
+})
+.then(r => r.json())
+.then(d => console.table(
+  d.stops.map(s => ({
+    name: s.stopName,
+    stopId: s.stopId,
+    regionName: d.regionName,
+    routes: s.routes?.map(r => r.routeShortName).join(', ')
+  }))
+))
+```
+
+> **Network note:** The BusMaps API runs on port **8443**. Ensure outbound TCP on 8443 is allowed on the display device's network.
+
+### Examples
 
 ```
-# London in metric (default)
+# London, metric
 http://localhost:3000/?city=london,gb
 
-# New York in imperial, no search bar
+# New York, imperial, no search bar
 http://localhost:3000/?city=new+york,us&units=imperial
 
-# Tokyo in Fahrenheit
-http://localhost:3000/?city=tokyo,jp&units=imperial
-
-# Minimal kiosk — no clock, no date, no forecast
+# Minimal kiosk — weather only, no clock/date/forecast
 http://localhost:3000/?city=singapore,sg&showtime=F&showdate=F&showforecast=F
+```
 
-# Hide the forecast strip only
-http://localhost:3000/?city=dubai,ae&showforecast=false
+#### New York University — Washington Square
 
-# Override the API key via URL
-http://localhost:3000/?city=paris,fr&openweathermapapi=your_key_here
+Weather and transit near NYU's main campus. Imperial units, covers nearby subway entrances and bus stops within 300 m.
 
-# Conditions only, imperial, custom key
-http://localhost:3000/?city=chicago,us&units=imperial&showforecast=N&openweathermapapi=your_key_here
+```
+http://localhost:3000/?city=new+york,us&lat=40.7316&lon=-74.0010&units=imperial&showdepartures=true&busmapsapi=YOUR_KEY&departureradius=300
+```
+
+```
+https://gappleby.github.io/weather-app/?city=new+york,us&lat=40.7316&lon=-74.0010&units=imperial&showdepartures=true&departureradius=300
+```
+
+#### Malvern East — Train Station (Melbourne, Australia)
+
+Next trains at Malvern station on the Glen Waverley line. Radius of 150 m keeps results to the station platform only.
+
+```
+http://localhost:3000/?city=melbourne,au&lat=-37.8663&lon=145.0293&showdepartures=true&busmapsapi=YOUR_KEY&departureradius=150
+```
+
+#### Ingliston Park & Ride — Edinburgh, Scotland
+
+Tram and bus departures at the Ingliston Park & Ride near Edinburgh Airport.
+
+```
+http://localhost:3000/?city=edinburgh,gb&lat=55.9391&lon=-3.3551&showdepartures=true&busmapsapi=YOUR_KEY&departureradius=200
+```
+
+```
+https://gappleby.github.io/weather-app/?city=edinburgh,gb&lat=55.9391&lon=-3.3551&showdepartures=true&departureradius=200
 ```
 
 ## Components
 
 - **WeatherApp.jsx**: Root component — manages all state, orchestrates API fetches, and composes the layout.
-- **Search.jsx**: City search input and button. Hidden when the `?city=` query string parameter is present.
+- **Search.jsx**: City search input and button. Hidden when `?city=` or `?lat=`/`?lon=` are present.
 - **Card.jsx**: Reusable tile used in three modes — current temperature, humidity, and wind speed.
 - **ForecastStrip.jsx**: Horizontal strip of hourly forecast cards for the next 6 hours.
 - **LocationClock.jsx**: Live clock (top right) showing the current time at the queried city, updating every second.
 - **LocationDate.jsx**: Live date (top left) in the regional format of the city's country, updating every minute.
+- **DepartureBoard.jsx**: Next departures list — shows a coloured route badge, destination (headsign), and minutes until departure. Real-time departures are highlighted in green; scheduled-only in white.
 
 ## API Integration
 
-The app uses two APIs. On each load (and every hour thereafter) both are fetched automatically.
+The app uses three APIs. Weather and forecast fetch on load and every 60 minutes. Departures fetch after the first weather load and then every 15 minutes independently.
 
 ### OpenWeatherMap — current conditions
 
 Requires an API key (see Installation).
 
 - **Endpoint:** `https://api.openweathermap.org/data/2.5/weather`
-- **Parameters:** `q` (city name), `appid` (API key), `units` (`metric` or `imperial`)
-- **Used for:** temperature, humidity, wind speed, weather condition icon, city coordinates, country code.
+- **Parameters:** `q` (city name) **or** `lat`/`lon` (when `?lat=`/`?lon=` are set), `appid`, `units`
+- **Used for:** temperature, humidity, wind speed, weather condition icon, city name, country code.
 
 ### Open-Meteo — hourly forecast
 
-Free, no API key required. City coordinates from the OpenWeatherMap response are passed directly.
+Free, no API key required. Uses `?lat=`/`?lon=` if provided, otherwise falls back to the coordinates returned by OpenWeatherMap.
 
 - **Endpoint:** `https://api.open-meteo.com/v1/forecast`
 - **Parameters:** `latitude`, `longitude`, `hourly=temperature_2m,weathercode`, `forecast_days=2`, `timezone=auto`, `temperature_unit`
 - **Used for:** next 6 hours of temperature and WMO weather code, plus the UTC offset and IANA timezone used by the clock and date display.
+
+### BusMaps — public transport departures
+
+Requires a BusMaps API key. Only fetched when `showdepartures=true`.
+
+- **Endpoint:** `https://capi.busmaps.com:8443/nextDepartures` (port 8443 — ensure it is open outbound)
+- **Auth headers:** `capi-key: Bearer <key>`, `capi-host: busmaps.com`
+- **Parameters:** `stopId` + `regionName` (specific stop) **or** `location` (lat,lon) + `radius` (metres)
+- **Used for:** next departures including route number, destination, scheduled time, and real-time time if available.
+- **Coordinate priority:** `?departurestopid=` → `?lat=`/`?lon=` → OpenWeatherMap coordinates.
 
 ## Technologies Used
 
@@ -182,17 +265,20 @@ The app ships with a multi-stage Dockerfile that produces a minimal image using 
 ```bash
 # Build
 docker build \
-  --build-arg NEXT_PUBLIC_OPENWEATHERMAP_API_KEY=your_key_here \
+  --build-arg NEXT_PUBLIC_OPENWEATHERMAP_API_KEY=your_owm_key_here \
+  --build-arg NEXT_PUBLIC_BUSMAPS_API_KEY=your_busmaps_key_here \
   -t weather-app .
 
 # Run
 docker run -p 3000:3000 weather-app
 ```
 
-Or with Docker Compose (reads the key from your shell environment or a `.env` file):
+Or with Docker Compose (reads keys from your shell environment or a `.env` file):
 
 ```bash
-NEXT_PUBLIC_OPENWEATHERMAP_API_KEY=your_key_here docker compose up --build
+NEXT_PUBLIC_OPENWEATHERMAP_API_KEY=your_owm_key_here \
+NEXT_PUBLIC_BUSMAPS_API_KEY=your_busmaps_key_here \
+docker compose up --build
 ```
 
 ### Deploy via GitHub (GitHub Container Registry)
